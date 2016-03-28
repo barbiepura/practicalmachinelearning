@@ -1,0 +1,104 @@
+---
+title: "Project - Practical Machine Learning"
+author: "Pura Chen"
+
+---
+
+Nowaday, wearable devices has become a very popular thechnology for people to keep track of their health. The goal of this project is to use data extracted from from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict how well they perform in those activities. The variable 'classe' in training set indicates the level of testers performance. We will use cross validation to pick an appropriate model for the prediction.
+
+###Data Analysis
+
+**Load Data**
+```{r, cache=TRUE}
+setwd("/Users/Pura/Desktop/CourseraR/MachineLearning/project/data")
+training<-read.csv("pml-training.csv")
+testing<-read.csv("pml-testing.csv")
+dim(training)
+```
+
+**Data Partition for Validation Set**
+```{r, cache=TRUE}
+suppressMessages(library(caret))
+suppressMessages(library(rpart))
+inTrain<-createDataPartition(training$classe, p=0.6, list = FALSE)
+myTrain<-training[inTrain, ]
+myTest<-training[-inTrain, ]
+dim(myTrain)
+```
+
+**pre-Proessing**
+
+Since the large size of data will reduce the speed of computation, we will filter out unnecessary variables 
+
+**Remove Near-zero Variance Variables**
+
+```{r, cache = TRUE}
+preProc<-preProcess(myTrain, method = c("nzv", "zv"))
+myTrain<-predict(preProc, myTrain)
+myTest<-predict(preProc, myTest)
+testing<-predict(preProc, testing)
+dim(myTrain)
+```
+
+**Remove variables with mostly NAs**
+
+```{r, cache=TRUE}
+MostNA <- sapply(myTrain, function(x) mean(is.na(x))) > 0.90
+myTrain<-myTrain[, MostNA==F]
+myTest<-myTest[, MostNA==F]
+testing<-testing[, MostNA==F]
+```
+
+**Principal Component Analysis**
+
+pca is used to reduce the variables with high correlations.
+```{r, cache=TRUE}
+preProc<-preProcess(myTrain,method = "pca")
+
+myTrain<-predict(preProc, myTrain)
+myTest<-predict(preProc, myTest)
+testing<-predict(preProc, testing)
+
+firstCol<-which(colnames(myTrain)=="classe")
+lastCol<-ncol(myTrain)
+myTrain<-myTrain[, firstCol: lastCol]
+myTest<-myTest[, firstCol: lastCol]
+testing<-testing[, firstCol: lastCol]
+
+```
+###Model Fitting
+
+We will use k-fold cross validation method in the model fitting to help with the accuracy. We will use classification tree and random forrest. Then compare the results
+
+**Classification Tree**
+
+```{r, cache=TRUE}
+set.seed(328)
+
+trControl<-trainControl(method = "cv", number = 3)
+Fit_tree<-train(classe~., method = "rpart", trControl = trControl, data = myTrain)
+print(Fit_tree$finalModel)
+pred_tree<-predict(Fit_tree, myTest)
+length(pred_tree)
+confusionMatrix(myTest$classe, pred_tree)
+```
+
+**Random Forest**
+```{r, cache=TRUE}
+set.seed(328)
+
+trControl<-trainControl(method = "cv", number = 3)
+Fit_rf<-train(classe~., method = "rf", trControl = trControl, data = myTrain)
+print(Fit_rf$finalModel)
+pred_rf<-predict(Fit_rf, myTest)
+confusionMatrix(myTest$classe, pred_rf)
+```
+Random forest gives an accuracy of 98%
+
+So we choose random forest model to predict the 20 test samples.
+
+###Prediction
+
+```{r, cache=TRUE}
+result<-predict(Fit_rf, testing)
+```
